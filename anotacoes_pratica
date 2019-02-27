@@ -1,0 +1,26 @@
+baud-rate elm327:
+	9600 or 38400
+
+mac scanner:
+	00:1D:A5:00:81:5E
+
+(des)fazer do pareamento uma porta serial:
+	rfcomm bind 0 <dev>
+	rfcomm release 0 <dev>
+
+setar baud-rate:
+	stty -F /dev/rfcomm0 38400
+
+conectar na porta serial:
+	screen /dev/rfcomm0 38400
+
+bluetoothctl:
+	power on
+	agent on -> para poder saber comunicar os PINs
+	default-agent
+	scan on
+	...
+	scan off
+	pair <dev>
+	trust <dev>
+	connect <dev> (parece que não precisa/funciona com o obd2)
