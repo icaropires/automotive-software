@@ -6,9 +6,9 @@ import (
 	"github.com/tarm/serial"
 	"log"
 	"os"
-	//"strconv"
 	"strings"
-	//	"time"
+	"sync"
+	"time"
 )
 
 const (
@@ -25,6 +25,7 @@ type Parameter struct {
 }
 
 var port *serial.Port
+var readingWritingMux sync.Mutex
 
 func main() {
 	// Consult https://en.wikipedia.org/wiki/OBD-II_PIDs for basic PIDS
@@ -48,14 +49,39 @@ func main() {
 			return float64(out[0])*256 + float64(out[1]) // seconds
 		}),
 		"ambientAirTemperature": getParameter("46", func(out []byte) float64 {
-			return float64(out[0]) - 40 //
+			return float64(out[0]) - 40 // Cº
 		}),
 	}
 
+	setUpPort()
+
+	defer func() {
+		log.Println("Shutting application down...")
+		err := port.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	for name, parameter := range parameters {
+		go func(n string, p Parameter) {
+			for {
+				out := p.collectData()
+				log.Println(n, "=", out)
+			}
+		}(name, *parameter)
+	}
+
+	wg.Wait()
+}
+
+func setUpPort() {
 	c := &serial.Config{
-		Name: os.Getenv(simulatorPortEnv),
-		Baud: baudRate,
-		//ReadTimeout: time.Second / 5, // Datasheet from Elm cites this value
+		Name:        os.Getenv(simulatorPortEnv),
+		Baud:        baudRate,
+		ReadTimeout: time.Second / 5, // Datasheet from Elm cites this value
 	}
 
 	log.Println("Chosen Port:", c.Name)
@@ -66,21 +92,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	port.Write([]byte("ATZ\r"))
-	buf := make([]byte, maxBufferSize)
-	port.Read(buf) // Discharding
 
-	for name, parameter := range parameters {
-		out := parameter.nextData()
-		log.Println(name, "=", out)
-	}
-
-	//const readingDelay = time.Second / frequencyReading
-
-	err = port.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
+	//port.Write([]byte("ATZ\r"))
+	//buf := make([]byte, maxBufferSize)
+	//port.Read(buf) // Discharded
+	//port.Flush()
 }
 
 // Factory for Parameters
@@ -88,11 +104,13 @@ func getParameter(pid string, formula func([]byte) float64) *Parameter {
 	return &Parameter{pid, formula}
 }
 
-func (p *Parameter) nextData() float64 {
+func (p *Parameter) collectData() float64 {
 	port.Flush()
 
 	showCurrentDataService, expectedResponseLines, carriageReturn := "01", "1", "\r"
 	command := []byte(showCurrentDataService + p.pid + expectedResponseLines + carriageReturn)
+
+	readingWritingMux.Lock() // before writing
 
 	n, err := port.Write(command)
 	if err != nil {
@@ -103,6 +121,9 @@ func (p *Parameter) nextData() float64 {
 
 	buf := make([]byte, maxBufferSize)
 	n, err = port.Read(buf)
+
+	readingWritingMux.Unlock() // after reading
+
 	if err != nil {
 		log.Println("Error reading from port:", err)
 		return 0
