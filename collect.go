@@ -3,18 +3,19 @@ package main
 
 import (
 	"encoding/hex"
-	"github.com/tarm/serial"
+	"errors"
 	"log"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tarm/serial"
 )
 
 const (
 	simulatorPortEnv = "SIMULATOR_PORT"
 	baudRate         = 38400
-	frequencyReading = 10
 	maxBufferSize    = 50
 )
 
@@ -67,9 +68,17 @@ func main() {
 	wg.Add(1)
 	for name, parameter := range parameters {
 		go func(n string, p Parameter) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Println("[ERROR] Error collecting data: ", r)
+				}
+			}()
+
 			for {
-				out := p.collectData()
-				log.Println(n, "=", out)
+				out, err := p.collectData()
+				if err == nil {
+					log.Println(n, "=", out)
+				}
 			}
 		}(name, *parameter)
 	}
@@ -81,7 +90,7 @@ func setUpPort() {
 	c := &serial.Config{
 		Name:        os.Getenv(simulatorPortEnv),
 		Baud:        baudRate,
-		ReadTimeout: time.Second / 5, // Datasheet from Elm cites this value
+		ReadTimeout: time.Second / 5, // It works
 	}
 
 	log.Println("Chosen Port:", c.Name)
@@ -104,7 +113,7 @@ func getParameter(pid string, formula func([]byte) float64) *Parameter {
 	return &Parameter{pid, formula}
 }
 
-func (p *Parameter) collectData() float64 {
+func (p *Parameter) collectData() (float64, error) {
 	port.Flush()
 
 	showCurrentDataService, expectedResponseLines, carriageReturn := "01", "1", "\r"
@@ -114,9 +123,12 @@ func (p *Parameter) collectData() float64 {
 
 	n, err := port.Write(command)
 	if err != nil {
-		log.Println("Error writting to port:", err)
+		log.Println("[ERROR] Couldn't write to port:", err)
+		return 0, err
 	} else if n == 0 {
-		log.Println("No data written")
+		msg := "[ERROR] No data written"
+		log.Println(msg)
+		return 0, errors.New(msg)
 	}
 
 	buf := make([]byte, maxBufferSize)
@@ -125,15 +137,16 @@ func (p *Parameter) collectData() float64 {
 	readingWritingMux.Unlock() // after reading
 
 	if err != nil {
-		log.Println("Error reading from port:", err)
-		return 0
+		log.Println("[ERROR] Couldn't read from port:", err)
+		return 0, err
 	} else if n == 0 {
-		log.Println("No data received")
-		return 0
+		msg := "[ERROR] No data received"
+		log.Println(msg)
+		return 0, errors.New(msg)
 	}
 
 	dataBytes := getDataBytes(buf[:n], "41", p.pid)
-	return p.formula(dataBytes)
+	return p.formula(dataBytes), nil
 }
 
 func getDataBytes(in []byte, expectedService string, pid string) []byte {
@@ -145,7 +158,7 @@ func getDataBytes(in []byte, expectedService string, pid string) []byte {
 
 	dataIdx := findDataBytes(octects, expectedService, pid)
 	if dataIdx == -1 {
-		log.Println("Couldn't find data")
+		log.Println("Couldn't find any data")
 		return []byte{}
 	}
 	dataString := strings.Join(octects[dataIdx:], "")
