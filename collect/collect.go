@@ -6,15 +6,21 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	emitter "github.com/icaropires/go/v2"
 	"github.com/tarm/serial"
 )
 
 const (
 	simulatorPortEnv = "SIMULATOR_PORT"
+	mqttHostEnv      = "MQTT_HOST"
+	mqttPortEnv      = "MQTT_PORT"
+	mqttKeyEnv       = "MQTT_KEY"
+	carNameEnv       = "CAR_NAME"
 	baudRate         = 38400
 	maxBufferSize    = 50
 )
@@ -31,25 +37,25 @@ var readingWritingMux sync.Mutex
 func main() {
 	// Consult https://en.wikipedia.org/wiki/OBD-II_PIDs for basic PIDS
 	parameters := map[string]*Parameter{
-		"vehicleSpeed": getParameter("0D", func(out []byte) float64 {
+		"vehicleSpeed": GetParameter("0D", func(out []byte) float64 {
 			return float64(out[0]) // km/h
 		}),
-		"engineRPM": getParameter("0C", func(out []byte) float64 {
+		"engineRPM": GetParameter("0C", func(out []byte) float64 {
 			return 256*float64(out[0]) + float64(out[1])/4 // RPM
 		}),
-		"absoluteBarometricPressure": getParameter("33", func(out []byte) float64 {
+		"absoluteBarometricPressure": GetParameter("33", func(out []byte) float64 {
 			return float64(out[0]) // kPa
 		}),
-		"throttlePosition": getParameter("11", func(out []byte) float64 {
+		"throttlePosition": GetParameter("11", func(out []byte) float64 {
 			return 100 * float64(out[0]) / 255 // %
 		}),
-		"traveledWithMalfunction": getParameter("21", func(out []byte) float64 {
+		"traveledWithMalfunction": GetParameter("21", func(out []byte) float64 {
 			return 256*float64(out[0]) + float64(out[1]) // Km
 		}),
-		"runtimeSinceEngineStart ": getParameter("1F", func(out []byte) float64 {
+		"runtimeSinceEngineStart ": GetParameter("1F", func(out []byte) float64 {
 			return float64(out[0])*256 + float64(out[1]) // seconds
 		}),
-		"ambientAirTemperature": getParameter("46", func(out []byte) float64 {
+		"ambientAirTemperature": GetParameter("46", func(out []byte) float64 {
 			return float64(out[0]) - 40 // Cº
 		}),
 	}
@@ -64,6 +70,11 @@ func main() {
 		}
 	}()
 
+	mqttClient := getConnectedMqttClient()
+	mqttKey := os.Getenv(mqttKeyEnv)
+	carName := os.Getenv(carNameEnv)
+	mqttChannelPrefix := "cars/" + carName + "/"
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	for name, parameter := range parameters {
@@ -77,6 +88,15 @@ func main() {
 			for {
 				out, err := p.collectData()
 				if err == nil {
+					channel := mqttChannelPrefix + n
+					outStr := strconv.FormatFloat(out, 'f', 2, 64)
+
+					log.Println("=>", outStr)
+					err := mqttClient.Publish(mqttKey, channel, outStr)
+					if err != nil {
+						log.Println("[NETWORK][ERROR] Couldn't publish data: ", err)
+					}
+
 					log.Println(n, "=", out)
 				}
 			}
@@ -108,8 +128,36 @@ func setUpPort() {
 	//port.Flush()
 }
 
-// Factory for Parameters
-func getParameter(pid string, formula func([]byte) float64) *Parameter {
+func getConnectedMqttClient() *emitter.Client {
+	mqttHost := "tcp://" + os.Getenv(mqttHostEnv) + ":" + os.Getenv(mqttPortEnv)
+
+	client, err := emitter.Connect(
+		mqttHost,
+		func(_ *emitter.Client, msg emitter.Message) {},
+		emitter.WithConnectTimeout(time.Second*5),
+		emitter.WithAutoReconnect(true),
+		emitter.WithPingTimeout(time.Second*2),
+	)
+
+	if err != nil {
+		log.Println("[NETWORK] [ERROR] Couldn't connect to MQTT broker: ", err)
+	}
+
+	client.OnConnect(func(_ *emitter.Client) {
+		log.Println("[NETWORK] Connected with MQTT broker successfully")
+	})
+	client.OnDisconnect(func(_ *emitter.Client, err error) {
+		log.Println("[NETWORK] Disconnected from MQTT broker: ", err)
+	})
+	client.OnError(func(_ *emitter.Client, err emitter.Error) {
+		log.Println("[NETWORK] Error: ", err)
+	})
+
+	return client
+}
+
+// GetParameter is a Factory for building parameters
+func GetParameter(pid string, formula func([]byte) float64) *Parameter {
 	return &Parameter{pid, formula}
 }
 
