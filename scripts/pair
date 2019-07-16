@@ -1,0 +1,35 @@
+#!/bin/sh
+
+if [ $# -le 0 ]; then
+    echo "Wrong usage. Example: $0 <dev>"
+    exit 1
+fi
+
+DEV="$1"
+
+echo "Preparing..."
+set -e
+bluetoothctl -- power on
+bluetoothctl -- pairable on
+bluetoothctl -- agent on
+set +e
+echo ""
+
+echo "Scanning on..."
+bluetoothctl -- default-agent
+bluetoothctl --timeout 5 -- scan on
+echo ""
+
+echo "Pairing..."
+bluetoothctl -- pair "$DEV"
+echo ""
+
+echo "Connecting..."
+bluetoothctl -- trust "$DEV"
+sudo rfcomm release 0 &>/dev/null
+sudo rfcomm bind 0 E4:C8:01:84:E3:98
+echo ""
+
+echo "Device:"
+ls -l /dev/rfcomm0 && echo "Ready to use!"
+echo ""
