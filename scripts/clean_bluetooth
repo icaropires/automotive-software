@@ -1,0 +1,16 @@
+#!/bin/sh
+
+if [ $# -le 0 ]; then
+    echo "Wrong usage. Example: $0 <dev>"
+    exit 1
+fi
+
+DEV="$1"
+
+bluetoothctl << EOF
+untrust $DEV
+remove $DEV
+power off
+EOF
+
+sudo rfcomm release 0 &>/dev/null
