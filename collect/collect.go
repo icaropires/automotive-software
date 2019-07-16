@@ -79,19 +79,12 @@ func main() {
 	wg.Add(1)
 	for name, parameter := range parameters {
 		go func(n string, p Parameter) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Println("[ERROR] Error collecting data: ", r)
-				}
-			}()
-
 			for {
 				out, err := p.collectData()
 				if err == nil {
 					channel := mqttChannelPrefix + n
 					outStr := strconv.FormatFloat(out, 'f', 2, 64)
 
-					log.Println("=>", outStr)
 					err := mqttClient.Publish(mqttKey, channel, outStr)
 					if err != nil {
 						log.Println("[NETWORK][ERROR] Couldn't publish data: ", err)
@@ -162,39 +155,53 @@ func GetParameter(pid string, formula func([]byte) float64) *Parameter {
 }
 
 func (p *Parameter) collectData() (float64, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("[ERROR] Error collecting data: ", r)
+		}
+	}()
+
 	port.Flush()
 
 	showCurrentDataService, expectedResponseLines, carriageReturn := "01", "1", "\r"
 	command := []byte(showCurrentDataService + p.pid + expectedResponseLines + carriageReturn)
 
+	buf, err := submitCommand(command)
+	if err != nil {
+		return 0, err
+	}
+
+	dataBytes := getDataBytes(buf, "41", p.pid)
+	return p.formula(dataBytes), nil
+}
+
+func submitCommand(command []byte) ([]byte, error) {
+	defer readingWritingMux.Unlock()
 	readingWritingMux.Lock() // before writing
 
 	n, err := port.Write(command)
 	if err != nil {
 		log.Println("[ERROR] Couldn't write to port:", err)
-		return 0, err
+		return []byte{}, err
 	} else if n == 0 {
 		msg := "[ERROR] No data written"
 		log.Println(msg)
-		return 0, errors.New(msg)
+		return []byte{}, errors.New(msg)
 	}
 
 	buf := make([]byte, maxBufferSize)
 	n, err = port.Read(buf)
 
-	readingWritingMux.Unlock() // after reading
-
 	if err != nil {
 		log.Println("[ERROR] Couldn't read from port:", err)
-		return 0, err
+		return []byte{}, err
 	} else if n == 0 {
 		msg := "[ERROR] No data received"
 		log.Println(msg)
-		return 0, errors.New(msg)
+		return []byte{}, errors.New(msg)
 	}
 
-	dataBytes := getDataBytes(buf[:n], "41", p.pid)
-	return p.formula(dataBytes), nil
+	return buf[:n], nil
 }
 
 func getDataBytes(in []byte, expectedService string, pid string) []byte {
