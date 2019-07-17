@@ -1,0 +1,47 @@
+install (Arch):
+    sudo pacman -S bluez bluez-utils
+    yay -S bluez-rfcomm bluez-hcitool
+
+status bluetooth devices:
+    rfkill list
+    expected to see (on acer laptop):
+        0: acer-wireless: Wireless LAN
+            Soft blocked: no
+            Hard blocked: no
+        1: acer-bluetooth: Bluetooth
+            Soft blocked: no
+            Hard blocked: no
+        2: phy0: Wireless LAN
+            Soft blocked: no
+            Hard blocked: no
+        3: hci0: Bluetooth
+            Soft blocked: no
+            Hard blocked: no
+
+baud-rate elm327:
+	9600 or 38400
+
+mac scanner:
+	00:1D:A5:00:81:5E
+
+From just pairing to serial:
+	sudo rfcomm bind 0 <dev>
+	sudo rfcomm release 0
+
+set baud-rate:
+	stty -F /dev/rfcomm0 38400
+
+connect serial:
+	sudo screen /dev/rfcomm0 38400
+
+bluetoothctl (to run from bash, run: bluetoothctl -- <command>):
+	power on
+	agent on -> para poder saber comunicar os PINs
+	default-agent
+	scan on
+	...
+	scan off
+    pairable on
+	pair <dev>
+	trust <dev>
+	connect <dev> (parece que não precisa/funciona com o obd2)
