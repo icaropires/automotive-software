@@ -23,6 +23,7 @@ const (
 	carNameEnv       = "CAR_NAME"
 	baudRate         = 38400
 	maxBufferSize    = 50
+	samplesAmount    = 50
 )
 
 // Parameter is a parameter read from OBDII
@@ -79,18 +80,33 @@ func main() {
 	wg.Add(1)
 	for name, parameter := range parameters {
 		go func(n string, p Parameter) {
+			count := 0
+			samples := make([]float64, samplesAmount)
+
 			for {
 				out, err := p.collectData()
 				if err == nil {
-					channel := mqttChannelPrefix + n
-					outStr := strconv.FormatFloat(out, 'f', 2, 64)
+					samples[count] = out
+					count++
+				}
 
+				if count == samplesAmount {
+					mean := float64(0)
+					for _, sample := range samples {
+						mean += sample
+					}
+					mean /= samplesAmount
+					log.Println(n, "=", mean)
+
+					count = 0
+					samples = make([]float64, samplesAmount)
+
+					channel := mqttChannelPrefix + n
+					outStr := strconv.FormatFloat(mean, 'f', 2, 64)
 					err := mqttClient.Publish(mqttKey, channel, outStr)
 					if err != nil {
 						log.Println("[NETWORK][ERROR] Couldn't publish data: ", err)
 					}
-
-					log.Println(n, "=", out)
 				}
 			}
 		}(name, *parameter)
