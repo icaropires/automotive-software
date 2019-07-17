@@ -9,23 +9,23 @@ DEV="$1"
 
 echo "Preparing..."
 set -e
-bluetoothctl -- power on
-bluetoothctl -- pairable on
-bluetoothctl -- agent on
+sudo bluetoothctl power on
+sudo bluetoothctl pairable on
+sudo bluetoothctl agent on
 set +e
 echo ""
 
 echo "Scanning on..."
-bluetoothctl -- default-agent
-bluetoothctl --timeout 5 -- scan on
+sudo bluetoothctl default-agent
+sudo bluetoothctl --timeout 10 -- scan on
 echo ""
 
 echo "Pairing..."
-bluetoothctl -- pair "$DEV"
+sudo bluetoothctl -- pair "$DEV"
 echo ""
 
 echo "Connecting..."
-bluetoothctl -- trust "$DEV"
+sudo bluetoothctl -- trust "$DEV"
 sudo rfcomm release 0 &>/dev/null
 sudo rfcomm bind 0 E4:C8:01:84:E3:98
 echo ""
