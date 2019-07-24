@@ -4,6 +4,7 @@ package main
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -23,7 +24,9 @@ const (
 	carNameEnv       = "CAR_NAME"
 	baudRate         = 38400
 	maxBufferSize    = 50
-	samplesAmount    = 50
+	samplesAmount    = 1
+	timeBeforeRead   = 100 // ms // Time after writing and before reading
+	readTimeout      = 1   // s
 )
 
 // Parameter is a parameter read from OBDII
@@ -119,7 +122,7 @@ func setUpPort() {
 	c := &serial.Config{
 		Name:        os.Getenv(simulatorPortEnv),
 		Baud:        baudRate,
-		ReadTimeout: time.Second / 5, // It works
+		ReadTimeout: readTimeout,
 	}
 
 	log.Println("Chosen Port:", c.Name)
@@ -131,10 +134,42 @@ func setUpPort() {
 		log.Fatal(err)
 	}
 
-	//port.Write([]byte("ATZ\r"))
-	//buf := make([]byte, maxBufferSize)
-	//port.Read(buf) // Discharded
-	//port.Flush()
+	port.Flush()
+
+	log.Println("Reseting ELM327...")
+	submitCommand([]byte("ATZ\r"), 1000)
+
+	log.Println("Setting searching for protocol...")
+	submitCommand([]byte("ATSP0\r"), 100)
+
+	port.Flush()
+	log.Println("Searching for protocols and supported pids")
+	buf, _ := submitCommand([]byte("0100\r"), 7000)
+	data := getDataBytes(buf, "41", "00")
+	pids := getSupportedPids(data)
+	printSupportedPids(pids)
+}
+
+func printSupportedPids(pids []int) {
+	pidsStr := make([]string, 0)
+	for _, pid := range pids {
+		pidsStr = append(pidsStr, fmt.Sprintf("0x%02X", pid))
+	}
+
+	fmt.Println("Supported PIDS by the vehicle: " + strings.Join(pidsStr, ", "))
+}
+
+func getSupportedPids(data []byte) []int {
+	pids := make([]int, 0)
+	for i, b := range data {
+		for j := 7; j >= 0; j-- {
+			if b&(1<<uint(j)) != 0 {
+				pids = append(pids, 1+(i*8)+int(7-j))
+			}
+		}
+	}
+
+	return pids
 }
 
 func getConnectedMqttClient() *emitter.Client {
@@ -177,12 +212,10 @@ func (p *Parameter) collectData() (float64, error) {
 		}
 	}()
 
-	port.Flush()
-
 	showCurrentDataService, expectedResponseLines, carriageReturn := "01", "1", "\r"
 	command := []byte(showCurrentDataService + p.pid + expectedResponseLines + carriageReturn)
 
-	buf, err := submitCommand(command)
+	buf, err := submitCommand(command, timeBeforeRead)
 	if err != nil {
 		return 0, err
 	}
@@ -191,9 +224,11 @@ func (p *Parameter) collectData() (float64, error) {
 	return p.formula(dataBytes), nil
 }
 
-func submitCommand(command []byte) ([]byte, error) {
+func submitCommand(command []byte, delayBeforeRead time.Duration /* ms */) ([]byte, error) {
 	defer readingWritingMux.Unlock()
 	readingWritingMux.Lock() // before writing
+
+	port.Flush()
 
 	n, err := port.Write(command)
 	if err != nil {
@@ -204,6 +239,8 @@ func submitCommand(command []byte) ([]byte, error) {
 		log.Println(msg)
 		return []byte{}, errors.New(msg)
 	}
+
+	time.Sleep(time.Millisecond * delayBeforeRead)
 
 	buf := make([]byte, maxBufferSize)
 	n, err = port.Read(buf)
@@ -221,20 +258,29 @@ func submitCommand(command []byte) ([]byte, error) {
 }
 
 func getDataBytes(in []byte, expectedService string, pid string) []byte {
-	octectsTmp := strings.Trim(string(in), ">")
-	octects := strings.Split(octectsTmp, " ")
+	octectsStr := string(in)
+
+	posData := strings.LastIndex(octectsStr, expectedService+" "+pid)
+	if posData == -1 {
+		log.Println("Couldn't find any data")
+		return []byte{}
+	}
+	octectsStr = octectsStr[posData:]
+
+	endOfData := strings.Index(octectsStr, "\r")
+	if endOfData == -1 {
+		endOfData = len(octectsStr) - 1
+	}
+	octectsStr = octectsStr[:endOfData]
+
+	octectsStr = strings.TrimSpace(octectsStr)
+	octects := strings.Split(octectsStr, " ")
 	for i := range octects {
 		octects[i] = strings.TrimSpace(octects[i])
 	}
 
-	dataIdx := findDataBytes(octects, expectedService, pid)
-	if dataIdx == -1 {
-		log.Println("Couldn't find any data")
-		return []byte{}
-	}
-	dataString := strings.Join(octects[dataIdx:], "")
+	dataString := strings.Join(octects[2:], "")
 	dataBytes, err := hex.DecodeString(dataString)
-
 	if err != nil {
 		log.Println("Invalid data: ", err)
 		return []byte{}
