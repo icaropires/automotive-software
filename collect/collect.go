@@ -54,15 +54,9 @@ func main() {
 		"vehicleSpeed": GetParameter("0D", func(out []byte) float64 {
 			return float64(out[0]) // km/h
 		}),
-		"traveledWithMalfunction": GetParameter("21", func(out []byte) float64 {
-			return 256*float64(out[0]) + float64(out[1]) // Km
+		"runtimeSinceEngineStart ": GetParameter("1F", func(out []byte) float64 {
+			return float64(out[0])*256 + float64(out[1]) // seconds
 		}),
-		//"runtimeSinceEngineStart ": GetParameter("1F", func(out []byte) float64 {
-		//	return float64(out[0])*256 + float64(out[1]) // seconds
-		//}),
-		//"ambientAirTemperature": GetParameter("46", func(out []byte) float64 {
-		//	return float64(out[0]) - 40 // Cº
-		//}),
 	}
 
 	setUpPort()
@@ -253,7 +247,7 @@ func getConnectedMqttClient() *emitter.Client {
 		log.Println("[NETWORK] Disconnected from MQTT broker: ", err)
 	})
 	client.OnError(func(_ *emitter.Client, err emitter.Error) {
-		log.Println("[NETWORK] Error: ", err)
+		//log.Println("[NETWORK] Error: ", err)
 	})
 
 	return client
