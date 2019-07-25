@@ -26,7 +26,7 @@ const (
 	baudRate         = 38400
 	maxBufferSize    = 50
 	samplesAmount    = 1
-	timeBeforeRead   = 100 // ms // Time after writing and before reading
+	timeBeforeRead   = 300 // ms // Time after writing and before reading
 	readTimeout      = 1   // s
 )
 
@@ -143,7 +143,7 @@ func prepareElm327() []int {
 	port.Flush()
 
 	log.Println("Reseting ELM327...")
-	submitCommand([]byte("ATZ\r"), 1000)
+	submitCommand([]byte("ATZ\r"), 5000)
 
 	pids := getSupportedPids()
 	printSupportedPids(pids)
