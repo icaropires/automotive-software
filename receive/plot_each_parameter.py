@@ -38,11 +38,11 @@ axs = axs.flat
 
 palettes = ( 'Oranges', 'Greens', 'RdPu', 'Blues')
 
-for i, param in enumerate(os.listdir(car_folder)):
+for i, attr in enumerate(os.listdir(car_folder)):
     df = pd.read_csv(
-        os.path.join(car_folder, param),
+        os.path.join(car_folder, attr),
         sep=' ',
-        names=('date', 'time', param),
+        names=('date', 'time', attr),
         header=None,
         parse_dates={'datetime': [0, 1]},
         date_parser=dateparse,
@@ -55,7 +55,7 @@ for i, param in enumerate(os.listdir(car_folder)):
 
     axs[i].set_xlim(min_x, max_x),
     axs[i].set_xlabel('Hora da coleta (tempo)', fontsize=14)
-    axs[i].set_ylabel(f'{translate[param]} ({units[param]})', fontsize=16)
+    axs[i].set_ylabel(f'{translate[attr]} ({units[attr]})', fontsize=16)
 
     axs[i].xaxis.set_major_locator(mdates.MinuteLocator(interval=3))
     axs[i].xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))

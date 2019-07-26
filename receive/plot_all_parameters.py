@@ -35,7 +35,7 @@ fig, ax = plt.subplots()
 translate = {
     'vehicleSpeed': 'velocidade',
     'engineRPM': 'frequência do motor',
-    'engineCoolanteTemperature': 'temperatura do líquido de resfriamento',
+    'engineCoolanteTemperature': 'temp. líquido resfr. do motor',
     'engineLoad': 'carga do motor',
 }
 
