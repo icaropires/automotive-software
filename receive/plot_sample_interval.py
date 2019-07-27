@@ -20,13 +20,11 @@ translate = {
     'engineLoad': 'carga do motor',
 }
 
-fig, axs = plt.subplots(2, 2, figsize=(12,7), sharex=True, sharey=True)
+fig, axs = plt.subplots(2, 2, figsize=(12, 7), sharex=True, sharey=True)
 axs = axs.flat
 
-
-car_folder = 'cars_output/carro_fernando/'
+car_folder = 'cars_output/lab-1-17/'
 palettes = ('Oranges', 'Greens', 'RdPu', 'Blues')
-
 
 for i, param in enumerate(os.listdir(car_folder)):
     file_path = os.path.join(car_folder, param)
@@ -51,8 +49,10 @@ for i, param in enumerate(os.listdir(car_folder)):
 
     axs[i].set_xlim(min_x, max_x),
     axs[i].set_title(translate[param], fontsize=16),
+
     axs[i].set_xlabel('Hora da coleta (tempo)', fontsize=14)
-    axs[i].set_ylabel(f'Intervalo entre coletas (s)', fontsize=16)
+    if not i & 1:
+        axs[i].set_ylabel(f'Intervalo entre coletas (s)', fontsize=16)
 
     axs[i].xaxis.set_major_locator(mdates.MinuteLocator(interval=3))
     axs[i].xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
@@ -62,5 +62,4 @@ for i, param in enumerate(os.listdir(car_folder)):
 #fig.autofmt_xdate()
 
 plt.tight_layout()
-plt.savefig('my_plot.png')
 plt.show()

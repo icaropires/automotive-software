@@ -22,7 +22,7 @@ car_folder = 'cars_output/carro_fernando/'
 translate = {
     'vehicleSpeed': 'velocidade',
     'engineRPM': 'frequência do motor',
-    'engineCoolanteTemperature': 'temp. líquido resfr.',
+    'engineCoolanteTemperature': 'TLA',
     'engineLoad': 'carga do motor',
 }
 
@@ -33,7 +33,7 @@ units = {
     'engineLoad': '%'
 }
 
-fig, axs = plt.subplots(2, 2, figsize=(7,7), sharex=True)
+fig, axs = plt.subplots(2, 2, figsize=(12,7), sharex=True)
 axs = axs.flat
 
 palettes = ( 'Oranges', 'Greens', 'RdPu', 'Blues')

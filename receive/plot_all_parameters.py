@@ -30,12 +30,12 @@ car_df = reduce(
     ) for attr in os.listdir(car_folder))
 ).set_index('datetime')
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(12, 7))
 
 translate = {
     'vehicleSpeed': 'velocidade',
     'engineRPM': 'frequência do motor',
-    'engineCoolanteTemperature': 'temp. líquido resfr. do motor',
+    'engineCoolanteTemperature': 'temperatura do líquido de arrefecimento',
     'engineLoad': 'carga do motor',
 }
 
@@ -86,5 +86,4 @@ plt.xlabel('Hora da coleta (tempo)', fontsize=15)
 
 plt.legend(labels=labels, prop={'size': 12})
 
-plt.savefig('my_plot.png')
 plt.show()
