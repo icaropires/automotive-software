@@ -17,7 +17,7 @@ def dateparse(date, time):
 
 
 # Folder must content just the attributes files!
-car_folder = 'cars_output/carro_fernando/'
+car_folder = '../cars_output/carro_fernando/'
 
 translate = {
     'vehicleSpeed': 'velocidade',

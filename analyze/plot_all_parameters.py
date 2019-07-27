@@ -13,7 +13,7 @@ def dateparse(date, time):
     dt = date + " " + time
     return pd.datetime.strptime(dt, '%Y/%m/%d %H:%M:%S.%f')
 
-car_folder = 'cars_output/carro_fernando/'
+car_folder = '../cars_output/carro_fernando/'
 
 # Folder must content just the attributes files!
 car_df = reduce(

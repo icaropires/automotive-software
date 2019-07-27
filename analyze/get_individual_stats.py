@@ -13,7 +13,7 @@ translate = {
     'engineLoad': 'carga do motor',
 }
 
-cars_folder = 'cars_output'
+cars_folder = '../cars_output'
 
 lab1 = dict(mean=0, std=0, count=0)
 lab2 = dict(mean=0, std=0, count=0)
